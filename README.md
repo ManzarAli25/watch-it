@@ -166,14 +166,6 @@ pytest                    # unit tests, plus an end-to-end stub run when ffmpeg 
 python -m watch_mcp.server    # start the stdio MCP server directly
 ```
 
-## Roadmap
-
-| Phase | Scope |
-| --- | --- |
-| **1** ✅ | Local files, Loom/ScreenPal URLs, structured timeline output |
-| **2** | OCR, audio transcription, terminal/browser understanding, in-video search |
-| **3** | Live screen sharing, continuous real-time observations streamed to the agent |
-
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
