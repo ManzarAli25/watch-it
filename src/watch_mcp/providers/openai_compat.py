@@ -21,9 +21,9 @@ from .base import Completion, Frame, VLMProvider
 
 
 class OpenAICompatProvider(VLMProvider):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, model: str | None = None) -> None:
         self._base_url = settings.vlm_base_url.rstrip("/")
-        self._model = settings.vlm_model
+        self._model = model or settings.vlm_model
         self._api_key = settings.vlm_api_key
         self._timeout = settings.vlm_timeout
         self._max_tokens = settings.vlm_max_tokens

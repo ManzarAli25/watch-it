@@ -53,10 +53,12 @@ async def analyze(
 
     if mode is Mode.FULL:
         # Native video: send the (optionally windowed) clip to a video-capable model.
+        # full_model overrides vlm_model here (sample may use an image-only model).
         video, mime = await asyncio.to_thread(read_video_bytes, entry.path, start_s, end_s)
-        provider = build_provider(settings)
+        full_model = settings.full_model or settings.vlm_model
+        provider = build_provider(settings, model=full_model)
         timeline, cost = await extract_timeline_from_video(
-            provider, video, mime, prompt=query, duration=duration, model=settings.vlm_model
+            provider, video, mime, prompt=query, duration=duration, model=full_model
         )
         return WatchResult(
             video_id=entry.video_id, duration=duration, events=timeline.events, cost=cost

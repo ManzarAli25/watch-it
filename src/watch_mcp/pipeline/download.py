@@ -49,6 +49,8 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
     """
     import yt_dlp
 
+    from ..ffmpeg import ffmpeg_path
+
     dest_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(dest_dir / "video.%(ext)s")
     opts = {
@@ -56,6 +58,8 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
+        # Use the bundled ffmpeg so users don't have to install one.
+        "ffmpeg_location": ffmpeg_path(),
         # Resilience on flaky networks / large files.
         "socket_timeout": 60,
         "retries": 5,
@@ -110,8 +114,10 @@ def read_video_bytes(
     if start_s is None and end_s is None:
         return path.read_bytes(), mime_for(path)
 
+    from ..ffmpeg import ffmpeg_path
+
     tmp = Path(tempfile.gettempdir()) / f"watch-clip-{path.stem}.mp4"
-    cmd = ["ffmpeg", "-y"]
+    cmd = [ffmpeg_path(), "-y"]
     if start_s is not None:
         cmd += ["-ss", str(start_s)]
     if end_s is not None:

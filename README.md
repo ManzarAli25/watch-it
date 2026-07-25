@@ -85,34 +85,51 @@ cache, so no re-download.
 - 💰 **Per-call cost tracking** — every `watch` result reports real USD + token usage for the model call(s)
 - 🔌 **Stdio MCP** — works with any MCP client
 
-## Install
+## Quick start
 
-**Requirements:** Python 3.11+ and [FFmpeg](https://ffmpeg.org/) (decodes video, merges Loom/ScreenPal streams).
+**One command.** No manual FFmpeg, no venv, no config files, no per-client setup.
+Requires only [`uv`](https://docs.astral.sh/uv/) (or `pipx`) and Python 3.11+.
 
 ```bash
-# 1. FFmpeg
-winget install Gyan.FFmpeg          # Windows  (macOS: brew install ffmpeg · Linux: apt install ffmpeg)
-
-# 2. Clone & install
-git clone https://github.com/ManzarAli25/watch-it.git
-cd watch-it
-python -m venv .venv
-# Windows: .\.venv\Scripts\Activate.ps1   ·   macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
-
-# 3. Configure
-cp .env.example .env                # then edit (or leave WATCH_VLM_MODEL=stub to try offline)
+uvx --from git+https://github.com/ManzarAli25/watch-it watch-mcp setup
 ```
 
-## Configure
+The `setup` wizard:
 
-Watch talks to any **OpenAI-compatible vision endpoint**. Set these in `.env`:
+1. asks for your API key and models (defaults to OpenRouter),
+2. writes the config to a per-user location, and
+3. auto-registers Watch with every MCP client it finds (Claude Code, Cursor, Codex).
+
+FFmpeg ships with the package — nothing to install. Then verify:
+
+```bash
+uvx --from git+https://github.com/ManzarAli25/watch-it watch-mcp doctor
+```
+
+Once published to PyPI this shortens to `uvx watch-mcp setup` /
+`pipx install watch-mcp && watch-mcp setup`.
+
+### CLI
+
+| Command | Does |
+| --- | --- |
+| `watch-mcp setup` | Interactive config + client registration |
+| `watch-mcp ui` | Terminal UI for config + client registration |
+| `watch-mcp doctor` | Check FFmpeg, config, and client registration |
+| `watch-mcp serve` | Run the MCP server over stdio (clients launch this) |
+| `watch-mcp watch <path\|url> --mode full` | Analyze one video from the terminal |
+
+### Configure
+
+Watch talks to any **OpenAI-compatible vision endpoint**. `setup` writes these; you
+can also set them as `WATCH_`-prefixed environment variables:
 
 | Variable | Description |
 | --- | --- |
-| `WATCH_VLM_BASE_URL` | e.g. `http://localhost:8000/v1` (local vLLM) or a hosted compat endpoint |
-| `WATCH_VLM_MODEL` | e.g. `Qwen/Qwen2.5-VL-7B-Instruct`. Set to `stub` for an offline, no-key dry run |
-| `WATCH_VLM_API_KEY` | Bearer token, if your endpoint requires one |
+| `WATCH_VLM_BASE_URL` | e.g. `https://openrouter.ai/api/v1` or `http://localhost:8000/v1` |
+| `WATCH_VLM_MODEL` | Sample-mode (image) model, e.g. `qwen/qwen3-vl-32b-instruct`. `stub` = offline dry run |
+| `WATCH_FULL_MODEL` | Full-mode (video) model, e.g. `qwen/qwen3.6-flash` (falls back to `WATCH_VLM_MODEL`) |
+| `WATCH_VLM_API_KEY` | Bearer token, if the endpoint needs one |
 
 Optional tuning: `WATCH_VLM_MAX_TOKENS`, `WATCH_MAX_FRAMES`, `WATCH_FRAME_MAX_EDGE`,
 `WATCH_SCENE_THRESHOLD`, `WATCH_FALLBACK_INTERVAL`, `WATCH_MAX_DURATION`,
@@ -120,8 +137,7 @@ Optional tuning: `WATCH_VLM_MAX_TOKENS`, `WATCH_MAX_FRAMES`, `WATCH_FRAME_MAX_ED
 
 ## Use
 
-Watch runs as a stdio MCP server (`python -m watch_mcp.server`), so any MCP-capable
-agent can use it. Register it with your client below, then just share a recording:
+After `setup`, just share a recording with your agent:
 
 ```
 Why is my React modal closing?
@@ -132,48 +148,35 @@ The agent calls `watch(video_path="bug.mp4", query="Why is my React modal closin
 reasons over the returned timeline, and can `get_frames(video_id, "00:22")` to see any
 moment for itself.
 
-> Use the **absolute path** to `python` from your virtualenv (e.g.
-> `.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on macOS/Linux) so the
-> server starts with the right dependencies, regardless of the client's working directory.
+<details>
+<summary>Manual client registration (if you skip <code>setup</code>)</summary>
 
-### Claude Code
+Each entry runs the `watch-mcp serve` command that lands on your PATH after install.
 
-```bash
-claude mcp add watch-it -- /path/to/.venv/bin/python -m watch_mcp.server
-```
+- **Claude Code:** `claude mcp add watch-it -- watch-mcp serve`
+- **Cursor** — `~/.cursor/mcp.json`:
+  ```json
+  { "mcpServers": { "watch-it": { "command": "watch-mcp", "args": ["serve"] } } }
+  ```
+- **Codex** — `~/.codex/config.toml`:
+  ```toml
+  [mcp_servers.watch-it]
+  command = "watch-mcp"
+  args = ["serve"]
+  ```
+</details>
 
-### Cursor
-
-Add to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "watch-it": {
-      "command": "/path/to/.venv/bin/python",
-      "args": ["-m", "watch_mcp.server"]
-    }
-  }
-}
-```
-
-Then enable **watch-it** under *Settings → MCP*.
-
-### Codex
-
-Add to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.watch-it]
-command = "/path/to/.venv/bin/python"
-args = ["-m", "watch_mcp.server"]
-```
-
-Or register it in one line:
+<details>
+<summary>Develop from source</summary>
 
 ```bash
-codex mcp add watch-it -- /path/to/.venv/bin/python -m watch_mcp.server
+git clone https://github.com/ManzarAli25/watch-it.git
+cd watch-it
+python -m venv .venv && . .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+pytest
 ```
+</details>
 
 **Example use cases:** bug reproduction, implementing a UI shown in a demo, extracting
 steps from a tutorial, and generating QA repro steps from a recording.
