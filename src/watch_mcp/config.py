@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     fallback_interval: float = 5.0
     max_duration: float = 1800.0  # reject inputs longer than this (seconds); 0 disables.
 
+    # Self-imposed deadlines, so the server bounds its own work instead of leaving
+    # the MCP client to abort on its idle timeout. 0 disables either one.
+    tool_timeout: float = 900.0  # whole `watch` call, overridable per call.
+    resolve_timeout: float = 30.0  # URL -> media resolution only; fails fast on bad hosts.
+    progress_interval: float = 5.0  # seconds between MCP progress notifications.
+
     # get_frames (Claude's own eyes)
     get_frames_max: int = 8  # hard cap on frames returned per call, protects context.
 

@@ -25,9 +25,9 @@ def _notify_update() -> None:
 @app.command()
 def serve() -> None:
     """Run the MCP server over stdio (what MCP clients launch)."""
-    from .server import mcp
+    from .server import main
 
-    mcp.run()
+    main()
 
 
 @app.command()

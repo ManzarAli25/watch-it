@@ -41,27 +41,23 @@ def validate_local(path: str) -> Path:
     return p.resolve()
 
 
-def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
-    """Download a hosted video (Loom / ScreenPal / Vimeo / direct MP4) via yt-dlp.
+class UnsupportedURLError(ValueError):
+    """The URL could not be resolved to a media stream (unsupported host, dead link)."""
 
-    Returns the path to the downloaded file inside ``dest_dir``. ``max_duration``
-    (seconds, 0 = off) rejects over-long videos before the bytes are fetched.
-    """
+
+def _ydl_opts(dest_dir: Path | None, max_duration: float, socket_timeout: float) -> dict:
     import yt_dlp
 
     from ..ffmpeg import ffmpeg_path
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    outtmpl = str(dest_dir / "video.%(ext)s")
     opts = {
-        "outtmpl": outtmpl,
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
         # Use the bundled ffmpeg so users don't have to install one.
         "ffmpeg_location": ffmpeg_path(),
         # Resilience on flaky networks / large files.
-        "socket_timeout": 60,
+        "socket_timeout": socket_timeout,
         "retries": 5,
         "fragment_retries": 5,
         "extractor_retries": 3,
@@ -71,6 +67,8 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
         # format of unknown codec.
         "format": "bestvideo[ext=mp4]/best",
     }
+    if dest_dir is not None:
+        opts["outtmpl"] = str(dest_dir / "video.%(ext)s")
     if max_duration and max_duration > 0:
         # Reject over-long videos up front. "<=?" allows through videos whose
         # duration is unknown pre-download (common with generic extractors) —
@@ -78,14 +76,77 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
         opts["match_filter"] = yt_dlp.utils.match_filter_func(
             f"duration <=? {int(max_duration)}"
         )
+    return opts
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        if info is None:
-            raise ValueError(
-                f"Video rejected (likely longer than the {int(max_duration)}s limit): {url}"
-            )
-        filename = ydl.prepare_filename(info)
+
+def resolve_media(url: str, max_duration: float = 0.0, socket_timeout: float = 20.0) -> dict:
+    """Probe a URL to a media description *without* downloading any of it.
+
+    Split out from the download so an unsupported host fails in seconds with a
+    real message instead of stalling somewhere inside the fetch. Raises
+    `UnsupportedURLError` when no extractor can turn the page into media.
+    """
+    import yt_dlp
+
+    opts = _ydl_opts(None, max_duration, socket_timeout)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except yt_dlp.utils.DownloadError as e:
+        raise UnsupportedURLError(
+            f"Could not resolve {url} to a video. The host may be unsupported or the "
+            f"link private/expired. Supported: Loom, ScreenPal, Vimeo (public), direct "
+            f"MP4/HLS, and anything else yt-dlp handles. Underlying error: {e}"
+        ) from e
+    if info is None:
+        raise UnsupportedURLError(
+            f"Video rejected (likely longer than the {int(max_duration)}s limit): {url}"
+        )
+    return info
+
+
+def download_url(
+    url: str,
+    dest_dir: Path,
+    max_duration: float = 0.0,
+    *,
+    socket_timeout: float = 60.0,
+    progress_cb=None,
+) -> Path:
+    """Download a hosted video (Loom / ScreenPal / Vimeo / direct MP4) via yt-dlp.
+
+    Returns the path to the downloaded file inside ``dest_dir``. ``max_duration``
+    (seconds, 0 = off) rejects over-long videos before the bytes are fetched.
+    ``progress_cb`` receives a 0..1 fraction plus a short human-readable detail.
+    """
+    import yt_dlp
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    opts = _ydl_opts(dest_dir, max_duration, socket_timeout)
+
+    if progress_cb is not None:
+        def _hook(d: dict) -> None:
+            if d.get("status") != "downloading":
+                return
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            done = d.get("downloaded_bytes") or 0
+            frac = (done / total) if total else 0.0
+            mb = done / 1024 / 1024
+            detail = f"{mb:.1f} MB" + (f" of {total / 1024 / 1024:.1f} MB" if total else "")
+            progress_cb(frac, detail)
+
+        opts["progress_hooks"] = [_hook]
+
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            if info is None:
+                raise ValueError(
+                    f"Video rejected (likely longer than the {int(max_duration)}s limit): {url}"
+                )
+            filename = ydl.prepare_filename(info)
+    except yt_dlp.utils.DownloadError as e:
+        raise UnsupportedURLError(f"Download failed for {url}: {e}") from e
 
     p = Path(filename)
     if p.is_file():

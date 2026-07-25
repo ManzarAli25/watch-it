@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "watch-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server that gives AI coding agents eyes — turns videos into structured timeline events."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,10 @@ authors = [{ name = "Watch" }]
 dependencies = [
     "mcp>=1.2.0",
     "yt-dlp>=2024.1.0",
-    "opencv-python-headless>=4.9.0",
+    # Pinned below 5.0: the 5.0.0.93 wheels ship a cv2/ that collides with the
+    # non-headless package and drag in numpy>=2.5, a combination whose native
+    # extension load can wedge indefinitely inside a running MCP server.
+    "opencv-python-headless>=4.9.0,<5",
     "imageio-ffmpeg>=0.5.1",
     "scenedetect>=0.6.4",
     "pydantic>=2.6",
