@@ -13,10 +13,14 @@ authors = [{ name = "Watch" }]
 dependencies = [
     "mcp>=1.2.0",
     "yt-dlp>=2024.1.0",
-    # Pinned below 5.0: the 5.0.0.93 wheels ship a cv2/ that collides with the
-    # non-headless package and drag in numpy>=2.5, a combination whose native
-    # extension load can wedge indefinitely inside a running MCP server.
+    # Both OpenCV distributions are pinned below 5.0: the 5.0.0.93 wheels require
+    # numpy>=2.5, a combination whose native extension load can wedge indefinitely
+    # inside a running MCP server. `opencv-python` is not imported directly — it
+    # arrives via scenedetect>=0.7, which hard-requires it — but it unpacks into
+    # the same cv2/ directory as the headless build, so leaving it unconstrained
+    # lets a 5.x install clobber the pinned one.
     "opencv-python-headless>=4.9.0,<5",
+    "opencv-python<5",
     "imageio-ffmpeg>=0.5.1",
     "scenedetect>=0.6.4",
     "pydantic>=2.6",
