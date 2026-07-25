@@ -13,6 +13,15 @@ app = typer.Typer(
 OPENROUTER = "https://openrouter.ai/api/v1"
 
 
+def _notify_update() -> None:
+    """Print an update notice to stderr (safe for interactive commands only)."""
+    from .update import check
+
+    notice = check()
+    if notice:
+        typer.secho(notice, fg=typer.colors.YELLOW, err=True)
+
+
 @app.command()
 def serve() -> None:
     """Run the MCP server over stdio (what MCP clients launch)."""
@@ -60,6 +69,7 @@ def setup(
             typer.secho(f"  {mark} {st.name}: {st.detail}", fg=color)
 
     typer.echo("\nRun 'watch-mcp doctor' to verify.")
+    _notify_update()
 
 
 @app.command()
@@ -104,6 +114,7 @@ def doctor() -> None:
         else:
             typer.secho(f"    [--] {c.name}: installed, not registered", fg=typer.colors.YELLOW)
 
+    _notify_update()
     raise typer.Exit(0 if ok else 1)
 
 

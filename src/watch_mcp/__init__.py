@@ -4,4 +4,4 @@ Turns videos (local files or hosted URLs) into a structured timeline of
 semantic events that agents like Claude Code can reason over.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

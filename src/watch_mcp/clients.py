@@ -3,25 +3,74 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 
 SERVER_NAME = "watch-it"
 
 
-def server_command() -> tuple[str, list[str]]:
-    """The command an MCP client should run to start the server.
+def _console_script() -> str | None:
+    """Locate the installed `watch-mcp` executable, on PATH or in a script dir.
 
-    Prefers the installed `watch-mcp` console script (on PATH after pipx/uv/pip);
-    falls back to the current interpreter running the module.
+    `shutil.which` alone misses installs whose bin dir isn't on the current
+    PATH yet (uv tool ``~/.local/bin``, pip ``--user`` scripts, a venv that
+    isn't active). Probing those dirs avoids registering a command that only
+    works in the shell that happened to run setup.
     """
     exe = shutil.which("watch-mcp")
     if exe:
+        return exe
+    names = ["watch-mcp.exe", "watch-mcp"] if os.name == "nt" else ["watch-mcp"]
+    dirs: list[Path] = [Path(sys.executable).parent]  # this venv's Scripts/bin
+    for scheme in (sysconfig.get_default_scheme(), "nt_user", "posix_user"):
+        try:
+            dirs.append(Path(sysconfig.get_path("scripts", scheme)))
+        except (KeyError, ValueError):
+            pass
+    dirs.append(Path.home() / ".local" / "bin")  # uv tool / pipx default
+    for d in dirs:
+        for n in names:
+            cand = d / n
+            if cand.is_file():
+                return str(cand)
+    return None
+
+
+def _can_import(python: str) -> bool:
+    """Whether `python` can actually import the package (persistently)."""
+    try:
+        r = subprocess.run(
+            [python, "-c", "import watch_mcp"], capture_output=True, timeout=15)
+        return r.returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def server_command() -> tuple[str, list[str]]:
+    """The command an MCP client should run to start the server.
+
+    Prefers the installed `watch-mcp` console script (on PATH or in a known
+    script dir after pipx/uv/pip). Falls back to the current interpreter running
+    the module only if that interpreter can persistently import the package —
+    otherwise we would register a command that fails to launch (e.g. when setup
+    runs under an ephemeral `uvx`/`uv run` interpreter). Raises when no working
+    command exists so callers surface an error instead of writing a broken entry.
+    """
+    exe = _console_script()
+    if exe:
         return exe, ["serve"]
-    return sys.executable, ["-m", "watch_mcp.cli", "serve"]
+    if _can_import(sys.executable):
+        return sys.executable, ["-m", "watch_mcp.cli", "serve"]
+    raise RuntimeError(
+        "Cannot find a persistent 'watch-mcp' command to register. Install Watch "
+        "with 'uv tool install watch-mcp' or 'pipx install watch-mcp', then re-run "
+        "'watch-mcp setup'."
+    )
 
 
 @dataclass
@@ -49,7 +98,10 @@ def register_claude() -> ClientStatus:
     exe = shutil.which("claude")
     if not exe:
         return ClientStatus("Claude Code", False, False, "claude CLI not found")
-    cmd, args = server_command()
+    try:
+        cmd, args = server_command()
+    except RuntimeError as e:
+        return ClientStatus("Claude Code", True, False, str(e))
     try:
         subprocess.run(
             [exe, "mcp", "add", SERVER_NAME, "--", cmd, *args],
@@ -74,7 +126,10 @@ def _cursor_path() -> Path:
 def register_cursor() -> ClientStatus:
     path = _cursor_path()
     installed = path.parent.exists()
-    cmd, args = server_command()
+    try:
+        cmd, args = server_command()
+    except RuntimeError as e:
+        return ClientStatus("Cursor", installed, False, str(e))
     data = {}
     if path.is_file():
         try:
@@ -99,7 +154,10 @@ def register_codex() -> ClientStatus:
 
     path = _codex_path()
     installed = path.parent.exists()
-    cmd, args = server_command()
+    try:
+        cmd, args = server_command()
+    except RuntimeError as e:
+        return ClientStatus("Codex", installed, False, str(e))
     data = {}
     if path.is_file():
         import tomllib

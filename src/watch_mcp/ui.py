@@ -76,6 +76,15 @@ class WatchApp(App):
 
     def on_mount(self) -> None:
         self._refresh_clients()
+        # Check for updates off the UI thread; toast if one is available.
+        self.run_worker(self._check_update, thread=True)
+
+    def _check_update(self) -> None:
+        from .update import check
+
+        notice = check()
+        if notice:
+            self.call_from_thread(self.notify, notice, severity="warning", timeout=12)
 
     # --- actions ---
 

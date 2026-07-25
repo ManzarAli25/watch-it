@@ -132,6 +132,20 @@ Restart your agent, then share a recording (see [Use](#use)).
 Once published to PyPI, step 2 shortens to `uv tool install watch-mcp` /
 `pipx install watch-mcp`.
 
+### Updating
+
+`setup`, `doctor`, and `ui` show a notice when a newer version is available (checked
+at most once a day, silent offline). To update — config and client registration are
+untouched:
+
+```bash
+uv tool upgrade watch-mcp        # or: pipx upgrade watch-mcp
+# git installs that report "nothing to upgrade":
+uv tool install --reinstall git+https://github.com/ManzarAli25/watch-it
+```
+
+Then restart your agent so it relaunches the new server.
+
 ### CLI
 
 | Command | Does |
