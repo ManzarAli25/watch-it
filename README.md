@@ -87,27 +87,50 @@ cache, so no re-download.
 
 ## Quick start
 
-**One command.** No manual FFmpeg, no venv, no config files, no per-client setup.
-Requires only [`uv`](https://docs.astral.sh/uv/) (or `pipx`) and Python 3.11+.
+No manual FFmpeg, no venv, no config files, no per-client setup. FFmpeg ships with
+the package. You need [`uv`](https://docs.astral.sh/uv/) (or `pipx`) and Python 3.11+.
+
+> Use a **persistent** install (`uv tool install` / `pipx install`), not `uvx`. MCP
+> clients launch `watch-mcp serve` repeatedly, so the command must stay on your PATH.
+
+**1. Install `uv`** (skip if `uv --version` works)
 
 ```bash
-uvx --from git+https://github.com/ManzarAli25/watch-it watch-mcp setup
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-The `setup` wizard:
-
-1. asks for your API key and models (defaults to OpenRouter),
-2. writes the config to a per-user location, and
-3. auto-registers Watch with every MCP client it finds (Claude Code, Cursor, Codex).
-
-FFmpeg ships with the package — nothing to install. Then verify:
+**2. Install Watch** (puts `watch-mcp` on your PATH)
 
 ```bash
-uvx --from git+https://github.com/ManzarAli25/watch-it watch-mcp doctor
+uv tool install git+https://github.com/ManzarAli25/watch-it
+uv tool update-shell     # add uv's bin dir to PATH
+```
+Open a **new** terminal, then check: `watch-mcp --help`.
+(Prefer pipx? `pipx install git+https://github.com/ManzarAli25/watch-it`.)
+
+**3. Run setup** — prompts for endpoint/key/models, then auto-registers with every
+MCP client it finds (Claude Code, Cursor, Codex).
+
+```bash
+watch-mcp setup
 ```
 
-Once published to PyPI this shortens to `uvx watch-mcp setup` /
-`pipx install watch-mcp && watch-mcp setup`.
+**4. Verify**
+
+```bash
+watch-mcp doctor      # checks ffmpeg, config, client registration
+claude mcp list       # confirms Claude Code sees "watch-it"
+```
+
+Restart your agent, then share a recording (see [Use](#use)).
+
+Once published to PyPI, step 2 shortens to `uv tool install watch-mcp` /
+`pipx install watch-mcp`.
 
 ### CLI
 
