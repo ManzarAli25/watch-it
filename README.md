@@ -82,6 +82,7 @@ cache, so no re-download.
 - ✂️ **Scene-aware sampling** — only meaningful moments go to the model, keeping output and token cost small
 - 👁️ **On-demand frames** — `get_frames` lets the agent look at exact pixels when the summary isn't enough
 - 🗄️ **Content-addressed cache** — repeat watches and frame pulls reuse the resolved video; survives restarts
+- 💰 **Per-call cost tracking** — every `watch` result reports real USD + token usage for the model call(s)
 - 🔌 **Stdio MCP** — works with any MCP client
 
 ## Install
