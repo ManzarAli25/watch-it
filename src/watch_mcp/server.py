@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from .models import Mode
 from .pipeline import analyze, fetch_frames
 
-mcp = FastMCP("watch")
+mcp = FastMCP("watch-it")
 
 
 @mcp.tool()

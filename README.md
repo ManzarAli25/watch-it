@@ -85,8 +85,8 @@ cache, so no re-download.
 winget install Gyan.FFmpeg          # Windows  (macOS: brew install ffmpeg · Linux: apt install ffmpeg)
 
 # 2. Clone & install
-git clone https://github.com/<you>/watch.git
-cd watch
+git clone https://github.com/ManzarAli25/watch-it.git
+cd watch-it
 python -m venv .venv
 # Windows: .\.venv\Scripts\Activate.ps1   ·   macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
@@ -130,7 +130,7 @@ moment for itself.
 ### Claude Code
 
 ```bash
-claude mcp add watch -- /path/to/.venv/bin/python -m watch_mcp.server
+claude mcp add watch-it -- /path/to/.venv/bin/python -m watch_mcp.server
 ```
 
 ### Cursor
@@ -140,7 +140,7 @@ Add to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 ```json
 {
   "mcpServers": {
-    "watch": {
+    "watch-it": {
       "command": "/path/to/.venv/bin/python",
       "args": ["-m", "watch_mcp.server"]
     }
@@ -148,14 +148,14 @@ Add to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 }
 ```
 
-Then enable **watch** under *Settings → MCP*.
+Then enable **watch-it** under *Settings → MCP*.
 
 ### Codex
 
 Add to `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.watch]
+[mcp_servers.watch-it]
 command = "/path/to/.venv/bin/python"
 args = ["-m", "watch_mcp.server"]
 ```
@@ -163,7 +163,7 @@ args = ["-m", "watch_mcp.server"]
 Or register it in one line:
 
 ```bash
-codex mcp add watch -- /path/to/.venv/bin/python -m watch_mcp.server
+codex mcp add watch-it -- /path/to/.venv/bin/python -m watch_mcp.server
 ```
 
 **Example use cases:** bug reproduction, implementing a UI shown in a demo, extracting
