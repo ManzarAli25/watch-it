@@ -18,6 +18,7 @@ class WatchApp(App):
     CSS = """
     Screen { align: center top; }
     #body { width: 90%; max-width: 90; padding: 1 2; }
+    #banner { width: auto; margin: 0 0 1 0; }
     .h { text-style: bold; color: $accent; margin: 1 0 0 0; }
     .hint { color: $text-muted; margin: 0 0 1 0; }
     Input { margin: 0 0 1 0; }
@@ -37,6 +38,7 @@ class WatchApp(App):
         yield Header(show_clock=False)
         cfg = read_config_file()
         with VerticalScroll(id="body"):
+            yield Static(self._banner(), id="banner")
             yield Static("Model configuration", classes="h")
             yield Static("OpenAI-compatible endpoint (e.g. OpenRouter).", classes="hint")
 
@@ -60,6 +62,17 @@ class WatchApp(App):
                 yield Button("Detect", id="detect")
                 yield Button("Register all", variant="success", id="register")
         yield Footer()
+
+    def _banner(self):
+        """Render the pixel-art banner; fall back to a title if anything fails."""
+        try:
+            from .banner import render_banner
+
+            return render_banner(max_width=76, max_height=16)
+        except Exception:  # noqa: BLE001 - never let the banner break the UI
+            from rich.text import Text
+
+            return Text("Watch — give AI coding agents eyes", style="bold")
 
     def on_mount(self) -> None:
         self._refresh_clients()
