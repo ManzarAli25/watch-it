@@ -6,6 +6,7 @@ import asyncio
 
 from ..config import Settings, get_settings
 from ..models import Mode, WatchResult, seconds_to_ts, ts_to_seconds
+from ..progress import ProgressState
 from ..providers import build_provider
 from .events import extract_timeline
 
@@ -18,6 +19,7 @@ async def analyze(
     start: str | None = None,
     end: str | None = None,
     settings: Settings | None = None,
+    state: ProgressState | None = None,
 ) -> WatchResult:
     """Resolve+cache → (mode) → WatchResult{video_id, duration, events}.
 
@@ -27,14 +29,38 @@ async def analyze(
     `fetch_frames` can reuse it without re-downloading.
     """
     from .. import cache  # lazy: pulls OpenCV/yt-dlp only on the video path.
-    from .download import read_video_bytes
+    from .download import is_url, read_video_bytes, resolve_media
     from .events import extract_timeline_from_video
     from .frames import sample_frames
     from .scenes import detect_scene_times
 
     settings = settings or get_settings()
+    state = state or ProgressState()
 
-    entry = await asyncio.to_thread(cache.resolve, path=video_path, settings=settings)
+    # Fail fast on URLs we can't resolve: probing metadata is cheap, so an
+    # unsupported host becomes an error in seconds instead of a stall inside the
+    # fetch. Skipped when the video is already cached (no network needed).
+    if is_url(video_path) and cache.cached_url(video_path, settings) is None:
+        state.set("resolving", 0.0, video_path)
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(resolve_media, video_path, settings.max_duration),
+                timeout=settings.resolve_timeout or None,
+            )
+        except TimeoutError as e:
+            raise TimeoutError(
+                f"Timed out after {settings.resolve_timeout:.0f}s resolving {video_path}. "
+                f"The host is likely unsupported or unreachable (WATCH_RESOLVE_TIMEOUT)."
+            ) from e
+
+    state.set("downloading", 0.0)
+    entry = await asyncio.to_thread(
+        cache.resolve,
+        path=video_path,
+        settings=settings,
+        progress_cb=lambda frac, detail: state.set("downloading", frac, detail),
+    )
+    state.set("probing", 1.0)
     duration_s = entry.duration_s
 
     if settings.max_duration and duration_s > settings.max_duration:
@@ -46,6 +72,7 @@ async def analyze(
 
     if mode is Mode.MANUAL:
         # No AI — just hand back the handle so Claude drives via get_frames.
+        state.set("done", 1.0)
         return WatchResult(video_id=entry.video_id, duration=duration, events=[])
 
     start_s = ts_to_seconds(start) if start is not None else None
@@ -54,17 +81,21 @@ async def analyze(
     if mode is Mode.FULL:
         # Native video: send the (optionally windowed) clip to a video-capable model.
         # full_model overrides vlm_model here (sample may use an image-only model).
+        state.set("extracting frames", 0.0, "preparing clip")
         video, mime = await asyncio.to_thread(read_video_bytes, entry.path, start_s, end_s)
         full_model = settings.full_model or settings.vlm_model
         provider = build_provider(settings, model=full_model)
+        state.set("analyzing", 0.0, full_model)
         timeline, cost = await extract_timeline_from_video(
             provider, video, mime, prompt=query, duration=duration, model=full_model
         )
+        state.set("done", 1.0)
         return WatchResult(
             video_id=entry.video_id, duration=duration, events=timeline.events, cost=cost
         )
 
     # mode == SAMPLE
+    state.set("detecting scenes", 0.0)
     times, _ = await asyncio.to_thread(
         detect_scene_times,
         entry.path,
@@ -73,6 +104,7 @@ async def analyze(
         start_s=start_s,
         end_s=end_s,
     )
+    state.set("extracting frames", 0.0, f"{len(times)} candidate points")
     frames = await asyncio.to_thread(
         sample_frames,
         entry.path,
@@ -84,9 +116,11 @@ async def analyze(
         raise RuntimeError("No frames could be extracted from the video.")
 
     provider = build_provider(settings)
+    state.set("analyzing", 0.0, f"{len(frames)} frames -> {settings.vlm_model}")
     timeline, cost = await extract_timeline(
         provider, frames, prompt=query, duration=duration, model=settings.vlm_model
     )
+    state.set("done", 1.0)
     return WatchResult(
         video_id=entry.video_id, duration=duration, events=timeline.events, cost=cost
     )

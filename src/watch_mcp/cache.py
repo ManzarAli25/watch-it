@@ -51,7 +51,13 @@ def _touch(entry_dir: Path) -> None:
         pass
 
 
-def resolve(*, path: str | None = None, url: str | None = None, settings: Settings) -> CacheEntry:
+def resolve(
+    *,
+    path: str | None = None,
+    url: str | None = None,
+    settings: Settings,
+    progress_cb=None,
+) -> CacheEntry:
     """Resolve a local path or URL into a cached entry, creating it if absent.
 
     Exactly one of `path` / `url`. A bare `path` that looks like an http(s) URL is
@@ -68,7 +74,20 @@ def resolve(*, path: str | None = None, url: str | None = None, settings: Settin
 
     if path:
         return _resolve_local(path, cache_dir)
-    return _resolve_url(url, cache_dir, settings)
+    return _resolve_url(url, cache_dir, settings, progress_cb=progress_cb)
+
+
+def cached_url(url: str, settings: Settings) -> CacheEntry | None:
+    """Return an existing entry for `url` without touching the network."""
+    entry_dir = settings.cache_dir / _hash(url)
+    if not _meta_path(entry_dir).is_file():
+        return None
+    meta = json.loads(_meta_path(entry_dir).read_text())
+    video = entry_dir / meta.get("video_name", "")
+    if not video.is_file():
+        return None
+    _touch(entry_dir)
+    return CacheEntry(_hash(url), video, meta["duration_s"], url, False)
 
 
 def _resolve_local(path: str, cache_dir: Path) -> CacheEntry:
@@ -95,7 +114,7 @@ def _resolve_local(path: str, cache_dir: Path) -> CacheEntry:
     return CacheEntry(vid, p, dur, str(p), True)
 
 
-def _resolve_url(url: str, cache_dir: Path, settings: Settings) -> CacheEntry:
+def _resolve_url(url: str, cache_dir: Path, settings: Settings, progress_cb=None) -> CacheEntry:
     vid = _hash(url)
     entry_dir = cache_dir / vid
 
@@ -109,7 +128,7 @@ def _resolve_url(url: str, cache_dir: Path, settings: Settings) -> CacheEntry:
 
     sweep(settings)  # make room before adding a copied download
     entry_dir.mkdir(parents=True, exist_ok=True)
-    dl = download_url(url, entry_dir, settings.max_duration)
+    dl = download_url(url, entry_dir, settings.max_duration, progress_cb=progress_cb)
     dur = probe_duration(dl)
     _write_meta(entry_dir, source=url, duration_s=dur, is_ref=False, video_name=dl.name)
     return CacheEntry(vid, dl, dur, url, False)
