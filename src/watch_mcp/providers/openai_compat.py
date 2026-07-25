@@ -3,9 +3,16 @@
 Works against any server exposing POST {base_url}/chat/completions with the
 OpenAI multimodal message schema: local vLLM (Qwen2.5-VL), DashScope compat
 mode, OpenRouter, etc. Model-agnostic per the project scope.
+
+Native video (mode='full') uses the `video_url` content type with a base64
+data URI. On OpenRouter this needs a video-capable model — e.g. qwen/qwen3.5-*,
+qwen/qwen3.6-*, or xiaomi/mimo-v2.5 (the qwen2.5-vl / qwen3-vl series are
+image-only).
 """
 
 from __future__ import annotations
+
+import base64
 
 import httpx
 
@@ -37,6 +44,17 @@ class OpenAICompatProvider(VLMProvider):
                 }
             )
 
+        return await self._complete(system, content)
+
+    async def describe_video(self, video: bytes, mime: str, system: str, user: str) -> str:
+        b64 = base64.b64encode(video).decode("ascii")
+        content = [
+            {"type": "text", "text": user},
+            {"type": "video_url", "video_url": {"url": f"data:{mime};base64,{b64}"}},
+        ]
+        return await self._complete(system, content)
+
+    async def _complete(self, system: str, content: list[dict]) -> str:
         payload = {
             "model": self._model,
             "messages": [

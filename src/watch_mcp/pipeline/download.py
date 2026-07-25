@@ -7,9 +7,20 @@ this module only knows how to validate a local file and how to fetch a URL.
 from __future__ import annotations
 
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}
+
+_MIME_BY_EXT = {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+}
 
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -69,3 +80,34 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
         if cand.suffix.lower() in VIDEO_EXTS:
             return cand
     raise RuntimeError(f"Download reported success but file missing: {p}")
+
+
+def mime_for(path: Path) -> str:
+    return _MIME_BY_EXT.get(path.suffix.lower(), "video/mp4")
+
+
+def read_video_bytes(
+    path: Path,
+    start_s: float | None = None,
+    end_s: float | None = None,
+) -> tuple[bytes, str]:
+    """Read a video as bytes for native-video input (mode='full').
+
+    When `start_s`/`end_s` are given, ffmpeg trims to that window first (stream
+    copy, no re-encode) so only the relevant span is sent to the model.
+    """
+    if start_s is None and end_s is None:
+        return path.read_bytes(), mime_for(path)
+
+    tmp = Path(tempfile.gettempdir()) / f"watch-clip-{path.stem}.mp4"
+    cmd = ["ffmpeg", "-y"]
+    if start_s is not None:
+        cmd += ["-ss", str(start_s)]
+    if end_s is not None:
+        cmd += ["-to", str(end_s)]
+    cmd += ["-i", str(path), "-an", "-c", "copy", str(tmp)]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        return tmp.read_bytes(), "video/mp4"
+    finally:
+        tmp.unlink(missing_ok=True)

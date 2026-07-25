@@ -51,9 +51,18 @@ async def test_manual_mode_skips_ai(tiny_video: Path, settings: Settings):
     assert result.duration != "00:00"
 
 
-async def test_full_mode_not_implemented(tiny_video: Path, settings: Settings):
-    with pytest.raises(NotImplementedError):
-        await analyze(str(tiny_video), mode=Mode.FULL, settings=settings)
+async def test_full_mode_native_video(tiny_video: Path, settings: Settings):
+    result = await analyze(str(tiny_video), mode=Mode.FULL, settings=settings)
+    assert result.video_id
+    assert result.events, "stub video provider should return events"
+
+
+async def test_full_mode_windowed(tiny_video: Path, settings: Settings):
+    # start/end triggers an ffmpeg trim before sending; should still succeed.
+    result = await analyze(
+        str(tiny_video), mode=Mode.FULL, start="00:00", end="00:02", settings=settings
+    )
+    assert result.events
 
 
 async def test_get_frames_after_watch(tiny_video: Path, settings: Settings):

@@ -59,7 +59,11 @@ video, return the timeline above plus a `video_id`. Modes:
 | --- | --- | --- |
 | `sample` (default) | AI scans scene-sampled frames → timeline | cheap, flat |
 | `manual` | no AI — just cache the video, return `video_id` + `duration` so the agent inspects frames itself | zero |
-| `full` | native-video model (not yet available) | — |
+| `full` | send the whole clip to a video-native model (`start`/`end` trims it first) | scales with duration |
+
+`full` needs a **video-capable** endpoint. On OpenRouter that means e.g.
+`qwen/qwen3.5-*`, `qwen/qwen3.6-*`, or `xiaomi/mimo-v2.5` — the `qwen2.5-vl` /
+`qwen3-vl` series are image-only and only work with `sample`.
 
 **`get_frames(video_id, start, end=None, max_frames=8)`** — pull the actual frame
 images from a video you already watched. The agent's own eyes, for when it doubts

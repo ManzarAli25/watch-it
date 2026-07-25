@@ -26,3 +26,14 @@ class VLMProvider(ABC):
     async def describe(self, frames: list[Frame], system: str, user: str) -> str:
         """Send frames + prompts to the model, return its text response."""
         raise NotImplementedError
+
+    async def describe_video(
+        self, video: bytes, mime: str, system: str, user: str
+    ) -> str:
+        """Send a whole video clip + prompts to a video-native model (mode='full').
+
+        Optional: providers that can't ingest video leave this unimplemented.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support native video input (mode='full')."
+        )

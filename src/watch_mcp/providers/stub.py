@@ -25,3 +25,11 @@ class StubProvider(VLMProvider):
             for i, f in enumerate(frames)
         ]
         return json.dumps({"duration": duration, "events": events})
+
+    async def describe_video(self, video: bytes, mime: str, system: str, user: str) -> str:
+        # No frames to key off — emit a couple deterministic events.
+        events = [
+            {"timestamp": "00:00", "type": "navigation", "description": "Stub video event (start)."},
+            {"timestamp": "00:01", "type": "interaction", "description": "Stub video event."},
+        ]
+        return json.dumps({"duration": "00:00", "events": events})

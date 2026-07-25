@@ -27,6 +27,8 @@ async def analyze(
     `fetch_frames` can reuse it without re-downloading.
     """
     from .. import cache  # lazy: pulls OpenCV/yt-dlp only on the video path.
+    from .download import read_video_bytes
+    from .events import extract_timeline_from_video
     from .frames import sample_frames
     from .scenes import detect_scene_times
 
@@ -46,15 +48,19 @@ async def analyze(
         # No AI — just hand back the handle so Claude drives via get_frames.
         return WatchResult(video_id=entry.video_id, duration=duration, events=[])
 
-    if mode is Mode.FULL:
-        raise NotImplementedError(
-            "mode='full' (native video) is not wired yet; use 'sample' or 'manual'."
-        )
-
-    # mode == SAMPLE
     start_s = ts_to_seconds(start) if start is not None else None
     end_s = ts_to_seconds(end) if end is not None else None
 
+    if mode is Mode.FULL:
+        # Native video: send the (optionally windowed) clip to a video-capable model.
+        video, mime = await asyncio.to_thread(read_video_bytes, entry.path, start_s, end_s)
+        provider = build_provider(settings)
+        timeline = await extract_timeline_from_video(
+            provider, video, mime, prompt=query, duration=duration
+        )
+        return WatchResult(video_id=entry.video_id, duration=duration, events=timeline.events)
+
+    # mode == SAMPLE
     times, _ = await asyncio.to_thread(
         detect_scene_times,
         entry.path,

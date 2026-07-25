@@ -35,7 +35,8 @@ async def watch(
             cheap and flat-cost. "manual" — no AI: just cache the video and return
             its video_id + duration so you can look at frames yourself via
             get_frames (use when the user already pointed you at an exact moment).
-            "full" — native-video model (not yet available).
+            "full" — send the whole clip to a video-native model (costlier, scales
+            with duration; requires a video-capable endpoint).
         start: Optional MM:SS — restrict analysis to from this time.
         end: Optional MM:SS — restrict analysis to up to this time.
 

@@ -51,18 +51,42 @@ async def extract_timeline(
     prompt: str | None = None,
     duration: str | None = None,
 ) -> Timeline:
-    """Call the provider, parse its output, retry once on malformed JSON.
+    """Sampled-frames path: call `describe`, parse, retry once on bad JSON.
 
     `duration` (if given) is treated as ground truth and overwrites whatever the
     model reports — the model only sees sampled frames, not the video's true end.
     """
     user = _default_user_prompt(prompt, duration)
 
-    raw = await provider.describe(frames, SYSTEM_PROMPT, user)
+    async def describe(system: str) -> str:
+        return await provider.describe(frames, system, user)
+
+    return await _parse_or_repair(describe, duration)
+
+
+async def extract_timeline_from_video(
+    provider: VLMProvider,
+    video: bytes,
+    mime: str,
+    *,
+    prompt: str | None = None,
+    duration: str | None = None,
+) -> Timeline:
+    """Native-video path (mode='full'): call `describe_video`, parse, retry once."""
+    user = _default_user_prompt(prompt, duration)
+
+    async def describe(system: str) -> str:
+        return await provider.describe_video(video, mime, system, user)
+
+    return await _parse_or_repair(describe, duration)
+
+
+async def _parse_or_repair(describe, duration: str | None) -> Timeline:
+    """Run a describe-callable, parse the JSON, retry once with a stricter prompt."""
+    raw = await describe(SYSTEM_PROMPT)
     timeline = _try_parse(raw)
     if timeline is None:
-        # One repair attempt.
-        raw = await provider.describe(frames, SYSTEM_PROMPT + _REPAIR_SUFFIX, user)
+        raw = await describe(SYSTEM_PROMPT + _REPAIR_SUFFIX)
         timeline = _try_parse(raw)
 
     if timeline is None:
