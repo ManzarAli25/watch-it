@@ -7,8 +7,8 @@ import re
 
 from pydantic import ValidationError
 
-from ..models import Timeline
-from ..providers.base import Frame, VLMProvider
+from ..models import Cost, Timeline
+from ..providers.base import Completion, Frame, VLMProvider
 
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -50,18 +50,20 @@ async def extract_timeline(
     *,
     prompt: str | None = None,
     duration: str | None = None,
-) -> Timeline:
+    model: str | None = None,
+) -> tuple[Timeline, Cost]:
     """Sampled-frames path: call `describe`, parse, retry once on bad JSON.
 
     `duration` (if given) is treated as ground truth and overwrites whatever the
     model reports — the model only sees sampled frames, not the video's true end.
+    Returns the timeline plus aggregated usage/cost.
     """
     user = _default_user_prompt(prompt, duration)
 
-    async def describe(system: str) -> str:
+    async def describe(system: str) -> Completion:
         return await provider.describe(frames, system, user)
 
-    return await _parse_or_repair(describe, duration)
+    return await _parse_or_repair(describe, duration, model)
 
 
 async def extract_timeline_from_video(
@@ -71,30 +73,53 @@ async def extract_timeline_from_video(
     *,
     prompt: str | None = None,
     duration: str | None = None,
-) -> Timeline:
+    model: str | None = None,
+) -> tuple[Timeline, Cost]:
     """Native-video path (mode='full'): call `describe_video`, parse, retry once."""
     user = _default_user_prompt(prompt, duration)
 
-    async def describe(system: str) -> str:
+    async def describe(system: str) -> Completion:
         return await provider.describe_video(video, mime, system, user)
 
-    return await _parse_or_repair(describe, duration)
+    return await _parse_or_repair(describe, duration, model)
 
 
-async def _parse_or_repair(describe, duration: str | None) -> Timeline:
-    """Run a describe-callable, parse the JSON, retry once with a stricter prompt."""
-    raw = await describe(SYSTEM_PROMPT)
-    timeline = _try_parse(raw)
+def _add(a: int | None, b: int | None) -> int | None:
+    if a is None and b is None:
+        return None
+    return (a or 0) + (b or 0)
+
+
+async def _parse_or_repair(describe, duration: str | None, model: str | None) -> tuple[Timeline, Cost]:
+    """Run a describe-callable, parse the JSON, retry once with a stricter prompt.
+
+    Accumulates cost/tokens across every call made (including the repair retry).
+    """
+    cost = Cost(model=model)
+
+    def account(c: Completion) -> None:
+        cost.calls += 1
+        if c.cost_usd is not None:
+            cost.usd = (cost.usd or 0.0) + c.cost_usd
+        cost.prompt_tokens = _add(cost.prompt_tokens, c.prompt_tokens)
+        cost.completion_tokens = _add(cost.completion_tokens, c.completion_tokens)
+
+    completion = await describe(SYSTEM_PROMPT)
+    account(completion)
+    timeline = _try_parse(completion.text)
     if timeline is None:
-        raw = await describe(SYSTEM_PROMPT + _REPAIR_SUFFIX)
-        timeline = _try_parse(raw)
+        completion = await describe(SYSTEM_PROMPT + _REPAIR_SUFFIX)
+        account(completion)
+        timeline = _try_parse(completion.text)
 
     if timeline is None:
-        raise ValueError(f"Model did not return valid timeline JSON.\nLast output:\n{raw[:1000]}")
+        raise ValueError(
+            f"Model did not return valid timeline JSON.\nLast output:\n{completion.text[:1000]}"
+        )
 
     if duration:
         timeline.duration = duration
-    return timeline
+    return timeline, cost
 
 
 def _try_parse(raw: str) -> Timeline | None:

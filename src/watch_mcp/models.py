@@ -55,6 +55,16 @@ class Mode(str, Enum):
     MANUAL = "manual"  # no AI: resolve + cache only; Claude drives via get_frames.
 
 
+class Cost(BaseModel):
+    """Model-usage cost for a watch call (from the endpoint's usage accounting)."""
+
+    usd: float | None = Field(default=None, description="Total USD billed, if reported.")
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    model: str | None = None
+    calls: int = Field(default=0, description="Number of model calls (incl. JSON repair).")
+
+
 class WatchResult(BaseModel):
     """What the `watch` tool returns."""
 
@@ -63,6 +73,10 @@ class WatchResult(BaseModel):
     events: list[Event] = Field(
         default_factory=list,
         description="Semantic timeline; empty when mode=manual.",
+    )
+    cost: Cost | None = Field(
+        default=None,
+        description="Model usage/cost for this call; null when no model was called (mode=manual).",
     )
 
 

@@ -43,9 +43,13 @@ A compact, structured timeline instead of thousands of tokens of frame descripti
     { "timestamp": "00:05", "type": "navigation",  "description": "Developer opens localhost:3000" },
     { "timestamp": "00:18", "type": "interaction", "description": "Clicks the Submit button" },
     { "timestamp": "00:22", "type": "error",       "description": "Console displays HTTP 500" }
-  ]
+  ],
+  "cost": { "usd": 0.000097, "prompt_tokens": 416, "completion_tokens": 128, "model": "qwen/qwen3-vl-32b-instruct", "calls": 1 }
 }
 ```
+
+`cost` reports real usage from the endpoint (via OpenRouter usage accounting); it's
+`null` for `mode="manual"` and `get_frames` since those make no model call.
 
 Event `type` is one of `navigation`, `interaction`, `error`, `ui_change`, `terminal`,
 `network`, `loading`, `dialog`, `code_edit`, `other`.

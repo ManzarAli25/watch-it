@@ -17,7 +17,7 @@ import base64
 import httpx
 
 from ..config import Settings
-from .base import Frame, VLMProvider
+from .base import Completion, Frame, VLMProvider
 
 
 class OpenAICompatProvider(VLMProvider):
@@ -28,7 +28,7 @@ class OpenAICompatProvider(VLMProvider):
         self._timeout = settings.vlm_timeout
         self._max_tokens = settings.vlm_max_tokens
 
-    async def describe(self, frames: list[Frame], system: str, user: str) -> str:
+    async def describe(self, frames: list[Frame], system: str, user: str) -> Completion:
         content: list[dict] = [{"type": "text", "text": user}]
         for f in frames:
             content.append(
@@ -46,7 +46,7 @@ class OpenAICompatProvider(VLMProvider):
 
         return await self._complete(system, content)
 
-    async def describe_video(self, video: bytes, mime: str, system: str, user: str) -> str:
+    async def describe_video(self, video: bytes, mime: str, system: str, user: str) -> Completion:
         b64 = base64.b64encode(video).decode("ascii")
         content = [
             {"type": "text", "text": user},
@@ -54,7 +54,7 @@ class OpenAICompatProvider(VLMProvider):
         ]
         return await self._complete(system, content)
 
-    async def _complete(self, system: str, content: list[dict]) -> str:
+    async def _complete(self, system: str, content: list[dict]) -> Completion:
         payload = {
             "model": self._model,
             "messages": [
@@ -63,6 +63,9 @@ class OpenAICompatProvider(VLMProvider):
             ],
             "temperature": 0.0,
             "max_tokens": self._max_tokens,
+            # OpenRouter usage accounting: return token counts + real USD cost
+            # inline, so we don't need a second /generation lookup.
+            "usage": {"include": True},
         }
         headers = {"Content-Type": "application/json"}
         if self._api_key:
@@ -77,4 +80,11 @@ class OpenAICompatProvider(VLMProvider):
             resp.raise_for_status()
             data = resp.json()
 
-        return data["choices"][0]["message"]["content"]
+        text = data["choices"][0]["message"]["content"]
+        usage = data.get("usage") or {}
+        return Completion(
+            text=text,
+            cost_usd=usage.get("cost"),
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+        )

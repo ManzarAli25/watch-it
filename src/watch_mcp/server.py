@@ -41,8 +41,11 @@ async def watch(
         end: Optional MM:SS — restrict analysis to up to this time.
 
     Returns:
-        JSON: {"video_id": "...", "duration": "MM:SS", "events": [{timestamp, type, description}, ...]}
-        (events is empty when mode="manual").
+        JSON: {"video_id": "...", "duration": "MM:SS",
+               "events": [{timestamp, type, description}, ...],
+               "cost": {"usd": ..., "prompt_tokens": ..., "completion_tokens": ...,
+                        "model": ..., "calls": ...}}
+        (events is empty and cost is null when mode="manual").
     """
     try:
         m = Mode(mode.strip().lower())

@@ -42,6 +42,7 @@ async def test_sample_mode_end_to_end(tiny_video: Path, settings: Settings):
     assert result.video_id
     assert result.events, "expected at least one event"
     assert all(":" in e.timestamp for e in result.events)
+    assert result.cost is not None and result.cost.calls >= 1
 
 
 async def test_manual_mode_skips_ai(tiny_video: Path, settings: Settings):
@@ -49,6 +50,7 @@ async def test_manual_mode_skips_ai(tiny_video: Path, settings: Settings):
     assert result.video_id
     assert result.events == []
     assert result.duration != "00:00"
+    assert result.cost is None  # no model call, no cost
 
 
 async def test_full_mode_native_video(tiny_video: Path, settings: Settings):

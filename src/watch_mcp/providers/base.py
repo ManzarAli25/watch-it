@@ -15,6 +15,16 @@ class Frame:
     mime: str = "image/jpeg"
 
 
+@dataclass
+class Completion:
+    """A model response plus (when the endpoint reports it) usage/cost."""
+
+    text: str
+    cost_usd: float | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
 class VLMProvider(ABC):
     """Turns a batch of timestamped frames into raw model text.
 
@@ -23,13 +33,13 @@ class VLMProvider(ABC):
     """
 
     @abstractmethod
-    async def describe(self, frames: list[Frame], system: str, user: str) -> str:
-        """Send frames + prompts to the model, return its text response."""
+    async def describe(self, frames: list[Frame], system: str, user: str) -> Completion:
+        """Send frames + prompts to the model, return its response (+ usage)."""
         raise NotImplementedError
 
     async def describe_video(
         self, video: bytes, mime: str, system: str, user: str
-    ) -> str:
+    ) -> Completion:
         """Send a whole video clip + prompts to a video-native model (mode='full').
 
         Optional: providers that can't ingest video leave this unimplemented.

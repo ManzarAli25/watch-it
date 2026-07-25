@@ -55,10 +55,12 @@ async def analyze(
         # Native video: send the (optionally windowed) clip to a video-capable model.
         video, mime = await asyncio.to_thread(read_video_bytes, entry.path, start_s, end_s)
         provider = build_provider(settings)
-        timeline = await extract_timeline_from_video(
-            provider, video, mime, prompt=query, duration=duration
+        timeline, cost = await extract_timeline_from_video(
+            provider, video, mime, prompt=query, duration=duration, model=settings.vlm_model
         )
-        return WatchResult(video_id=entry.video_id, duration=duration, events=timeline.events)
+        return WatchResult(
+            video_id=entry.video_id, duration=duration, events=timeline.events, cost=cost
+        )
 
     # mode == SAMPLE
     times, _ = await asyncio.to_thread(
@@ -80,8 +82,12 @@ async def analyze(
         raise RuntimeError("No frames could be extracted from the video.")
 
     provider = build_provider(settings)
-    timeline = await extract_timeline(provider, frames, prompt=query, duration=duration)
-    return WatchResult(video_id=entry.video_id, duration=duration, events=timeline.events)
+    timeline, cost = await extract_timeline(
+        provider, frames, prompt=query, duration=duration, model=settings.vlm_model
+    )
+    return WatchResult(
+        video_id=entry.video_id, duration=duration, events=timeline.events, cost=cost
+    )
 
 
 async def fetch_frames(
