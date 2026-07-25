@@ -87,11 +87,6 @@ cache, so no re-download.
 
 ## Quick start
 
-No manual FFmpeg, no venv, no config files, no per-client setup. FFmpeg ships with
-the package. You need [`uv`](https://docs.astral.sh/uv/) (or `pipx`) and Python 3.11+.
-
-> Use a **persistent** install (`uv tool install` / `pipx install`), not `uvx`. MCP
-> clients launch `watch-mcp serve` repeatedly, so the command must stay on your PATH.
 
 **1. Install `uv`** (skip if `uv --version` works)
 
