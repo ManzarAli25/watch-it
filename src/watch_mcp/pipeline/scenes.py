@@ -12,15 +12,21 @@ def detect_scene_times(
     *,
     threshold: float,
     fallback_interval: float,
+    start_s: float | None = None,
+    end_s: float | None = None,
 ) -> tuple[list[float], float]:
     """Return (sample timestamps in seconds, video duration in seconds).
 
     Timestamps are one point near the middle of each detected scene. Falls back
     to fixed-interval sampling when the detector finds 0/1 scenes (e.g. a static
-    screen recording with no hard cuts).
+    screen recording with no hard cuts). When `start_s`/`end_s` are given, sampling
+    is restricted to that window.
     """
     video = open_video(str(video_path))
-    duration_s = video.duration.get_seconds() if video.duration else 0.0
+    duration_s = video.duration.seconds if video.duration else 0.0
+
+    lo = start_s if start_s is not None else 0.0
+    hi = end_s if end_s is not None else (duration_s or float("inf"))
 
     manager = SceneManager()
     manager.add_detector(ContentDetector(threshold=threshold))
@@ -28,19 +34,23 @@ def detect_scene_times(
     scenes = manager.get_scene_list()
 
     if len(scenes) >= 2:
-        times = [(start.get_seconds() + end.get_seconds()) / 2.0 for start, end in scenes]
-        return times, duration_s
+        times = [(s.seconds + e.seconds) / 2.0 for s, e in scenes]
+        windowed = [t for t in times if lo <= t <= hi]
+        if windowed:
+            return windowed, duration_s
+        # Window fell between cuts — fall through to interval sampling within it.
 
-    return _interval_times(duration_s, fallback_interval), duration_s
+    span_end = hi if hi != float("inf") else duration_s
+    return _interval_times(lo, span_end, fallback_interval), duration_s
 
 
-def _interval_times(duration_s: float, interval: float) -> list[float]:
-    if duration_s <= 0:
-        return [0.0]
+def _interval_times(start_s: float, end_s: float, interval: float) -> list[float]:
+    if end_s <= 0 or end_s <= start_s:
+        return [max(0.0, start_s)]
     interval = max(0.5, interval)
     times: list[float] = []
-    t = interval / 2.0
-    while t < duration_s:
+    t = start_s + interval / 2.0
+    while t < end_s:
         times.append(t)
         t += interval
-    return times or [duration_s / 2.0]
+    return times or [(start_s + end_s) / 2.0]

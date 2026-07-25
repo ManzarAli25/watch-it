@@ -34,9 +34,23 @@ class Settings(BaseSettings):
     fallback_interval: float = 5.0
     max_duration: float = 1800.0  # reject inputs longer than this (seconds); 0 disables.
 
+    # get_frames (Claude's own eyes)
+    get_frames_max: int = 8  # hard cap on frames returned per call, protects context.
+
+    # Video cache (content-addressed; backs video_id / get_frames)
+    cache_ttl: float = 3600.0  # evict cache entries older than this (seconds); 0 disables.
+    cache_max_bytes: int = 2 * 1024**3  # hard size cap for copied downloads (LRU evict).
+
     # Misc
     temp_dir: str = ""
     ocr: bool = False  # Phase 2 hook; unused in Phase 1.
+
+    @property
+    def cache_dir(self) -> Path:
+        import tempfile
+
+        root = Path(self.temp_dir) if self.temp_dir else Path(tempfile.gettempdir())
+        return root / "watch-mcp" / "cache"
 
     @property
     def use_stub(self) -> bool:

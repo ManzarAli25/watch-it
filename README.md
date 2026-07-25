@@ -37,6 +37,7 @@ A compact, structured timeline instead of thousands of tokens of frame descripti
 
 ```json
 {
+  "video_id": "a3f8c1d29b4e07f5",
   "duration": "02:13",
   "events": [
     { "timestamp": "00:05", "type": "navigation",  "description": "Developer opens localhost:3000" },
@@ -49,13 +50,31 @@ A compact, structured timeline instead of thousands of tokens of frame descripti
 Event `type` is one of `navigation`, `interaction`, `error`, `ui_change`, `terminal`,
 `network`, `loading`, `dialog`, `code_edit`, `other`.
 
+## Tools
+
+**`watch(video_path, query=None, mode="sample", start=None, end=None)`** — analyze a
+video, return the timeline above plus a `video_id`. Modes:
+
+| mode | what it does | cost |
+| --- | --- | --- |
+| `sample` (default) | AI scans scene-sampled frames → timeline | cheap, flat |
+| `manual` | no AI — just cache the video, return `video_id` + `duration` so the agent inspects frames itself | zero |
+| `full` | native-video model (not yet available) | — |
+
+**`get_frames(video_id, start, end=None, max_frames=8)`** — pull the actual frame
+images from a video you already watched. The agent's own eyes, for when it doubts
+the timeline or the user pointed at an exact moment. Backed by a content-addressed
+cache, so no re-download.
+
 ## Features
 
 - 🎥 **Local files** — `.mp4`, `.mov`, `.webm`, `.mkv`, `.avi`, `.m4v`
-- 🔗 **Hosted URLs** — Loom, ScreenPal, Vimeo (public), direct MP4 (downloaded to a temp file, deleted after analysis)
+- 🔗 **Hosted URLs** — Loom, ScreenPal, Vimeo (public), direct MP4
 - 🧠 **Model-agnostic** — any OpenAI-compatible vision endpoint (local vLLM Qwen2.5-VL, DashScope, OpenRouter, …)
-- ✂️ **Scene-aware sampling** — only meaningful moments are sent to the model, keeping output and token cost small
-- 🔌 **One tool** — `watch_video`, over stdio, works with any MCP client
+- ✂️ **Scene-aware sampling** — only meaningful moments go to the model, keeping output and token cost small
+- 👁️ **On-demand frames** — `get_frames` lets the agent look at exact pixels when the summary isn't enough
+- 🗄️ **Content-addressed cache** — repeat watches and frame pulls reuse the resolved video; survives restarts
+- 🔌 **Stdio MCP** — works with any MCP client
 
 ## Install
 
@@ -86,7 +105,9 @@ Watch talks to any **OpenAI-compatible vision endpoint**. Set these in `.env`:
 | `WATCH_VLM_MODEL` | e.g. `Qwen/Qwen2.5-VL-7B-Instruct`. Set to `stub` for an offline, no-key dry run |
 | `WATCH_VLM_API_KEY` | Bearer token, if your endpoint requires one |
 
-Optional tuning: `WATCH_VLM_MAX_TOKENS`, `WATCH_MAX_FRAMES`, `WATCH_FRAME_MAX_EDGE`, `WATCH_SCENE_THRESHOLD`, `WATCH_FALLBACK_INTERVAL`, `WATCH_MAX_DURATION`.
+Optional tuning: `WATCH_VLM_MAX_TOKENS`, `WATCH_MAX_FRAMES`, `WATCH_FRAME_MAX_EDGE`,
+`WATCH_SCENE_THRESHOLD`, `WATCH_FALLBACK_INTERVAL`, `WATCH_MAX_DURATION`,
+`WATCH_GET_FRAMES_MAX`, `WATCH_CACHE_TTL`, `WATCH_CACHE_MAX_BYTES`.
 
 ## Use
 
@@ -98,8 +119,9 @@ Why is my React modal closing?
 [bug.mp4]
 ```
 
-The agent calls `watch_video(path="bug.mp4", prompt="Why is my React modal closing?")`
-and reasons over the returned timeline.
+The agent calls `watch(video_path="bug.mp4", query="Why is my React modal closing?")`,
+reasons over the returned timeline, and can `get_frames(video_id, "00:22")` to see any
+moment for itself.
 
 > Use the **absolute path** to `python` from your virtualenv (e.g.
 > `.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on macOS/Linux) so the
@@ -150,14 +172,21 @@ steps from a tutorial, and generating QA repro steps from a recording.
 ## How it works
 
 ```
-input (path | url)
-  → resolve            local file, or yt-dlp download to a temp file
+watch(video_path, mode="sample")
+  → resolve + cache    local file (referenced) or yt-dlp download (copied); content-addressed video_id
   → scene detection    PySceneDetect finds meaningful cut points
   → frame sampling     one keyframe per scene (interval fallback for static clips)
   → downscale          Pillow, longest edge ~768px
-  → VLM                batched frames + prompt → strict timeline JSON
+  → VLM                batched frames + query → strict timeline JSON
   → validate           parsed into a typed model (one repair retry on bad JSON)
+
+get_frames(video_id, start, end)
+  → cache lookup       reuse the resolved video (no re-download)
+  → grab + downscale   evenly-spaced frames in [start, end], returned as images
 ```
+
+`mode="manual"` stops after resolve+cache — no VLM — so the agent can drive
+entirely through `get_frames`.
 
 ## Develop
 

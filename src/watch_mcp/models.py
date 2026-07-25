@@ -47,6 +47,25 @@ class Timeline(BaseModel):
     events: list[Event] = Field(default_factory=list)
 
 
+class Mode(str, Enum):
+    """How `watch` perceives the video."""
+
+    SAMPLE = "sample"  # scene-detect + frame sampling + VLM → timeline (default, cheap).
+    FULL = "full"      # native-video model (scales with duration).
+    MANUAL = "manual"  # no AI: resolve + cache only; Claude drives via get_frames.
+
+
+class WatchResult(BaseModel):
+    """What the `watch` tool returns."""
+
+    video_id: str = Field(description="Handle for get_frames; content-addressed cache key.")
+    duration: str = Field(description="Total video duration as MM:SS or HH:MM:SS.")
+    events: list[Event] = Field(
+        default_factory=list,
+        description="Semantic timeline; empty when mode=manual.",
+    )
+
+
 def seconds_to_ts(seconds: float) -> str:
     """Format seconds as MM:SS (or HH:MM:SS past an hour)."""
     seconds = max(0, int(round(seconds)))
@@ -55,3 +74,21 @@ def seconds_to_ts(seconds: float) -> str:
     if h:
         return f"{h:02d}:{m:02d}:{s:02d}"
     return f"{m:02d}:{s:02d}"
+
+
+def ts_to_seconds(ts: str | float | int) -> float:
+    """Parse MM:SS / HH:MM:SS (or a raw seconds number) into float seconds."""
+    if isinstance(ts, (int, float)):
+        return float(ts)
+    parts = ts.strip().split(":")
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError as e:
+        raise ValueError(f"Bad timestamp {ts!r}; expected MM:SS or HH:MM:SS.") from e
+    if len(nums) == 1:
+        return nums[0]
+    if len(nums) == 2:
+        return nums[0] * 60 + nums[1]
+    if len(nums) == 3:
+        return nums[0] * 3600 + nums[1] * 60 + nums[2]
+    raise ValueError(f"Bad timestamp {ts!r}; expected MM:SS or HH:MM:SS.")

@@ -1,7 +1,15 @@
 import pytest
 from pydantic import ValidationError
 
-from watch_mcp.models import Event, EventType, Timeline, seconds_to_ts
+from watch_mcp.models import (
+    Event,
+    EventType,
+    Mode,
+    Timeline,
+    WatchResult,
+    seconds_to_ts,
+    ts_to_seconds,
+)
 
 
 def test_timeline_roundtrip():
@@ -34,3 +42,25 @@ def test_bad_timestamp_rejected():
 )
 def test_seconds_to_ts(secs, expected):
     assert seconds_to_ts(secs) == expected
+
+
+@pytest.mark.parametrize(
+    "ts,expected",
+    [("00:05", 5), ("01:05", 65), ("01:01:01", 3661), ("90", 90), (12.5, 12.5)],
+)
+def test_ts_to_seconds(ts, expected):
+    assert ts_to_seconds(ts) == expected
+
+
+def test_ts_to_seconds_rejects_garbage():
+    with pytest.raises(ValueError):
+        ts_to_seconds("banana")
+
+
+def test_mode_values():
+    assert {m.value for m in Mode} == {"sample", "full", "manual"}
+
+
+def test_watch_result_defaults_empty_events():
+    r = WatchResult(video_id="abc", duration="00:10")
+    assert r.events == []
