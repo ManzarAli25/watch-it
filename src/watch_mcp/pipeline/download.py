@@ -56,13 +56,24 @@ def download_url(url: str, dest_dir: Path, max_duration: float = 0.0) -> Path:
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
-        # Video only — Watch never uses audio, so skip fetching/muxing it. Prefer a
-        # single already-muxed mp4 to avoid an ffmpeg merge; fall back to best.
-        "format": "bestvideo[ext=mp4]/best[ext=mp4]/best",
+        # Resilience on flaky networks / large files.
+        "socket_timeout": 60,
+        "retries": 5,
+        "fragment_retries": 5,
+        "extractor_retries": 3,
+        # Prefer video-only mp4 (skip audio Watch never uses) when a site exposes
+        # separate streams; otherwise fall back to the best single file. Broad
+        # fallback matters for generic extractors (Loom/ScreenPal) with one muxed
+        # format of unknown codec.
+        "format": "bestvideo[ext=mp4]/best",
     }
     if max_duration and max_duration > 0:
-        # Reject over-long videos up front (before downloading the bytes).
-        opts["match_filter"] = yt_dlp.utils.match_filter_func(f"duration <= {int(max_duration)}")
+        # Reject over-long videos up front. "<=?" allows through videos whose
+        # duration is unknown pre-download (common with generic extractors) —
+        # the pipeline re-checks the real duration after probing.
+        opts["match_filter"] = yt_dlp.utils.match_filter_func(
+            f"duration <=? {int(max_duration)}"
+        )
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
